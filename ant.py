@@ -1,5 +1,6 @@
 import serial
 import time
+import json
 from typing import Optional, Dict, Any
 
 
@@ -69,21 +70,21 @@ class ESP32Robot:
 
                 parsed = self.parse_line(line)
 
-                if parsed["type"] == "ACK":
+                if parsed.get("type") == "ack":
                     return {"ok": True, "raw": line, "parsed": parsed}
 
-                if parsed["type"] == "ERR":
+                if parsed.get("type") == "err":
                     return {"ok": False, "raw": line, "parsed": parsed}
 
-                # Ignore sensor/debug lines while waiting for ACK/ERR
+                # Ignore scan/debug lines while waiting for ack/err
             time.sleep(0.01)
 
         return {
             "ok": False,
             "raw": "TIMEOUT",
-            "parsed": {"type": "TIMEOUT"},
+            "parsed": {"type": "timeout"},
         }
-
+    
     def command(self, cmd: str, timeout: float = 5.0) -> Dict[str, Any]:
         self.send_raw(cmd)
         return self.wait_response(timeout=timeout)
@@ -120,58 +121,16 @@ class ESP32Robot:
 
     @staticmethod
     def parse_line(line: str) -> Dict[str, Any]:
-        parts = line.split(",")
+        try:
+            data = json.loads(line)
 
-        if not parts or not parts[0]:
-            return {"type": "EMPTY", "raw": line}
+            if isinstance(data, dict) and "type" in data:
+                return data
 
-        head = parts[0]
+            return {"type": "raw", "raw": line}
 
-        if head == "ACK":
-            return {
-                "type": "ACK",
-                "cmd": parts[1] if len(parts) > 1 else "",
-                "raw": line,
-            }
-
-        if head == "ERR":
-            return {
-                "type": "ERR",
-                "msg": ",".join(parts[1:]) if len(parts) > 1 else "",
-                "raw": line,
-            }
-
-        if head == "TOF":
-            # Expected: TOF,angle,distance,status
-            try:
-                return {
-                    "type": "TOF",
-                    "angle": int(parts[1]),
-                    "distance_mm": int(parts[2]),
-                    "status": parts[3] if len(parts) > 3 else "",
-                    "raw": line,
-                }
-            except (IndexError, ValueError):
-                return {"type": "RAW", "raw": line}
-
-        if head == "IMU":
-            # Expected: IMU,ax,ay,az,gx,gy,gz,temp
-            try:
-                return {
-                    "type": "IMU",
-                    "ax": float(parts[1]),
-                    "ay": float(parts[2]),
-                    "az": float(parts[3]),
-                    "gx": float(parts[4]),
-                    "gy": float(parts[5]),
-                    "gz": float(parts[6]),
-                    "temp_c": float(parts[7]),
-                    "raw": line,
-                }
-            except (IndexError, ValueError):
-                return {"type": "RAW", "raw": line}
-
-        return {"type": "RAW", "raw": line}
+        except json.JSONDecodeError:
+            return {"type": "raw", "raw": line}
 
 
 def main() -> None:
