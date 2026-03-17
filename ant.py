@@ -2,7 +2,7 @@ import serial
 import time
 import json
 from typing import Optional, Dict, Any
-
+import cv2
 
 class ESP32Robot:
     def __init__(
@@ -119,6 +119,26 @@ class ESP32Robot:
 
         return results
 
+    def get_TOF(self, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
+        ser = self._require_serial()
+        start = time.time()
+
+        while time.time() - start < timeout:
+
+            if ser.in_waiting:
+                line = self.read_line()
+                if not line:
+                    continue
+
+                data = self.parse_line(line)
+
+                if data.get("type") == "scan":
+                    return data
+
+            time.sleep(0.005)
+
+        return None
+
     @staticmethod
     def parse_line(line: str) -> Dict[str, Any]:
         try:
@@ -140,28 +160,17 @@ def main() -> None:
         robot.connect()
         print("Connected to ESP32 on /dev/serial0")
 
-        print("\nTurn 90:")
-        print(robot.turn(90))
+        while True:
+            scan = robot.get_TOF()
 
-        time.sleep(1)
+            if scan:
+                distance = scan["tof_mm"]
+                angle = scan["angle"]
 
-        print("\nMove straight 200 mm:")
-        print(robot.move(0, 200))
+                print(f"TOF: {distance} mm at {angle} degrees")
 
-        time.sleep(1)
-
-        print("\nMove at -45 degrees for 150 mm:")
-        print(robot.move(-45, 150))
-
-        time.sleep(1)
-
-        print("\nStop:")
-        print(robot.stop())
-
-        print("\nReading sensor lines for 2 seconds:")
-        sensor_data = robot.read_sensor_lines(duration=2.0)
-        for item in sensor_data:
-            print(item)
+                if distance != -1 and distance < 100:
+                    robot.move(0, 100)
 
     finally:
         robot.close()
