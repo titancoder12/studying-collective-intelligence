@@ -177,18 +177,18 @@ def main() -> None:
                 valid_points.append((angle, dist))
 
             # default choice
-            chosen_angle = 180
+            chosen_angle = 0
 
             if valid_points:
-                # 1. if 0 deg is free, go there
+                # 1. if 90 deg is free, go there
                 zero_free = False
                 for angle, dist in valid_points:
-                    if angle == 0 and dist > 150:
+                    if angle == 90 and dist > 150:
                         chosen_angle = 0
                         zero_free = True
                         break
 
-                # 2. otherwise choose the closest free angle to 0
+                # 2. otherwise choose the closest free angle to 90
                 if not zero_free:
                     free_angles = []
                     for angle, dist in valid_points:
@@ -196,7 +196,7 @@ def main() -> None:
                             free_angles.append(angle)
 
                     if free_angles:
-                        chosen_angle = min(free_angles, key=lambda a: abs(a))
+                        chosen_angle = min(free_angles, key=lambda a: abs(a - 90))
 
             print("Chosen angle:", chosen_angle)
 
