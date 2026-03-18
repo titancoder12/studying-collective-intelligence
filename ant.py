@@ -161,16 +161,49 @@ def main() -> None:
         print("Connected to ESP32 on /dev/serial0")
 
         while True:
-            scan = robot.get_TOF()
+            scan_points = robot.read_sensor_lines(duration=0.5)
 
-            if scan:
-                distance = scan["tof_mm"]
-                angle = scan["angle"]
+            valid_points = []
+            for item in scan_points:
+                if item.get("type") != "scan":
+                    continue
 
-                print(f"TOF: {distance} mm at {angle} degrees")
+                angle = item.get("angle")
+                dist = item.get("tof_mm", -1)
 
-                if distance != -1 and distance < 100:
-                    robot.move(0, 100)
+                if angle is None or dist == -1:
+                    continue
+
+                valid_points.append((angle, dist))
+
+            # default choice
+            chosen_angle = 180
+
+            if valid_points:
+                # 1. if 0 deg is free, go there
+                zero_free = False
+                for angle, dist in valid_points:
+                    if angle == 0 and dist > 150:
+                        chosen_angle = 0
+                        zero_free = True
+                        break
+
+                # 2. otherwise choose the closest free angle to 0
+                if not zero_free:
+                    free_angles = []
+                    for angle, dist in valid_points:
+                        if dist > 150:
+                            free_angles.append(angle)
+
+                    if free_angles:
+                        chosen_angle = min(free_angles, key=lambda a: abs(a))
+
+            print("Chosen angle:", chosen_angle)
+
+            resp = robot.move(chosen_angle, 100)
+            print(resp)
+
+            time.sleep(0.5)
 
     finally:
         robot.close()
